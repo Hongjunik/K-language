@@ -1,0 +1,18 @@
+# object files
+*.o
+
+# generated assembly / binaries
+out
+out.asm
+out_*.asm
+out_*.o
+K_lang_v02_4_fixed
+K_lang_v02_4_fixed.o
+
+# logs
+debug.log
+err.log
+
+# editor / OS noise
+.vscode/
+.DS_Store
