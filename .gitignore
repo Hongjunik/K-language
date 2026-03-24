@@ -16,3 +16,9 @@ err.log
 # editor / OS noise
 .vscode/
 .DS_Store
+
+# build outputs
+build/
+*.o
+*.out
+*.lst
