@@ -2,10 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="$ROOT_DIR/src/K_lang_v02_4_fixed.asm"
+SRC="$ROOT_DIR/src/K_lang_v02_5.asm"
 BUILD_DIR="$ROOT_DIR/build"
 
-COMPILER_O="$BUILD_DIR/K_lang_v02_4_fixed.o"
+COMPILER_O="$BUILD_DIR/K_lang_v02_5.o"
 COMPILER_BIN="$BUILD_DIR/kc"
 
 GENERATED_ASM="$BUILD_DIR/out.asm"
