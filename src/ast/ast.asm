@@ -1,0 +1,499 @@
+; =========================================================
+; make_int_node
+; 현재 tok_int_value를 AST_INT 노드로 만든다.
+; 출력: rax = 노드 포인터
+; =========================================================
+make_int_node:
+    push rcx
+
+    call ast_alloc
+
+    pop rcx
+
+    mov qword [rax + NODE_TYPE], AST_INT
+    mov rcx, [tok_int_value]
+    mov [rax + NODE_A], rcx
+    ret
+
+; =========================================================
+; make_ident_node
+; 현재 tok_start, tok_len을 AST_IDENT 노드로 만든다.
+; 출력: rax = 노드 포인터
+; =========================================================
+make_ident_node:
+    push rcx
+    push rdx
+
+    call ast_alloc
+
+    pop rdx
+    pop rcx
+
+    mov qword [rax + NODE_TYPE], AST_IDENT
+    mov rcx, [tok_start]
+    mov rdx, [tok_len]
+    mov [rax + NODE_A], rcx
+    mov [rax + NODE_B], rdx
+    ret
+
+; =========================================================
+; make_unary_node
+; 입력:
+;   rdi = 연산자 토큰 (예: TOK_MINUS)
+;   rsi = child ptr
+; 출력:
+;   rax = 노드 포인터
+; =========================================================
+make_unary_node:
+    push rdi
+    push rsi
+
+    call ast_alloc
+
+    pop rsi
+    pop rdi
+
+    mov qword [rax + NODE_TYPE], AST_UNARY
+    mov [rax + NODE_A], rdi
+    mov [rax + NODE_B], rsi
+    ret
+
+; =========================================================
+; make_binary_node
+; 입력:
+;   rdi = 연산자 토큰
+;   rsi = left ptr
+;   rdx = right ptr
+; 출력:
+;   rax = 노드 포인터
+; =========================================================
+make_binary_node:
+    push rdi
+    push rsi
+    push rdx
+
+    call ast_alloc
+
+    pop rdx
+    pop rsi
+    pop rdi
+
+    mov qword [rax + NODE_TYPE], AST_BINARY
+    mov [rax + NODE_A], rdi
+    mov [rax + NODE_B], rsi
+    mov [rax + NODE_C], rdx
+    ret
+
+; =========================================================
+; make_print_node
+; 입력:
+;   rdi = expr ptr
+; 출력:
+;   rax = 노드 포인터
+; =========================================================
+make_print_node:
+    push rdi
+
+    call ast_alloc
+
+    pop rdi
+    mov qword [rax + NODE_TYPE], AST_PRINT
+    mov [rax + NODE_A], rdi
+    ret
+
+; =========================================================
+; make_var_decl_node
+; 입력:
+;   rdi = ident start
+;   rsi = ident len
+;   rdx = init expr ptr
+; 출력:
+;   rax = 노드 포인터
+; =========================================================
+make_var_decl_node:
+    push rdi
+    push rsi
+    push rdx
+
+    call ast_alloc
+    
+    pop rdx
+    pop rsi
+    pop rdi
+
+    mov qword [rax + NODE_TYPE], AST_VAR_DECL
+    mov [rax + NODE_A], rdi
+    mov [rax + NODE_B], rsi
+    mov [rax + NODE_C], rdx
+    ret
+
+; =========================================================
+; make_if_node
+; 입력:
+;   rdi = cond ptr
+;   rsi = then block ptr
+; 출력:
+;   rax = 노드 포인터
+; =========================================================
+make_if_node:
+    push rdi
+    push rsi
+
+    call ast_alloc
+
+    pop rsi
+    pop rdi
+
+    mov qword [rax + NODE_TYPE], AST_IF
+    mov [rax + NODE_A], rdi
+    mov [rax + NODE_B], rsi
+    ret
+
+; =========================================================
+; make_while_node
+; 입력:
+;   rdi = cond ptr
+;   rsi = body block ptr
+; 출력:
+;   rax = 노드 포인터
+; =========================================================
+make_while_node:
+    push rdi
+    push rsi
+
+    call ast_alloc
+
+    pop rsi
+    pop rdi
+
+    mov qword [rax + NODE_TYPE], AST_WHILE
+    mov [rax + NODE_A], rdi
+    mov [rax + NODE_B], rsi
+    ret
+
+; =========================================================
+; make_stmt_list_node
+; 입력:
+;   rdi = stmt ptr
+;   rsi = next ptr
+; 출력:
+;   rax = 노드 포인터
+; =========================================================
+make_stmt_list_node:
+    push rdi
+    push rsi
+
+    call ast_alloc
+
+    pop rsi
+    pop rdi
+
+    mov qword [rax + NODE_TYPE], AST_STMT_LIST
+    mov [rax + NODE_A], rdi
+    mov [rax + NODE_B], rsi
+    ret
+
+; =========================================================
+; make_block_node
+; 입력:
+;   rdi = stmt_list head ptr
+; 출력:
+;   rax = 노드 포인터
+; =========================================================
+make_block_node:
+    push rdi
+
+    call ast_alloc
+
+    pop rdi
+
+    mov qword [rax + NODE_TYPE], AST_BLOCK
+    mov [rax + NODE_A], rdi
+    ret
+
+; =========================================================
+; block_append_stmt
+; 입력:
+;   rdi = AST_BLOCK ptr
+;   rsi = stmt ptr
+; 출력:
+;   rax = same AST_BLOCK ptr
+; =========================================================
+block_append_stmt:
+    push rdi
+    push rsi
+
+    ; 새 stmt_list 노드 생성: (stmt, next=0)
+    mov rdi, rsi
+    xor rsi, rsi
+    call make_stmt_list_node
+    mov r8, rax
+
+    pop rsi
+    pop rdi
+
+    mov rcx, [rdi + NODE_A]
+    test rcx, rcx
+    jnz .append_to_tail
+
+    ; 빈 block이면 head에 바로 연결
+    mov [rdi + NODE_A], r8
+    mov rax, rdi
+    ret
+
+.append_to_tail:
+.walk:
+    mov rdx, [rcx + NODE_B]
+    test rdx, rdx
+    jz .link_here
+
+    mov rcx, rdx
+    jmp .walk
+
+.link_here:
+    mov [rcx + NODE_B], r8
+    mov rax, rdi
+    ret
+
+; =========================================================
+; make_program_node
+; 입력:
+;   rdi = stmt_list head ptr
+; 출력:
+;   rax = 노드 포인터
+; =========================================================
+make_program_node:
+    push rdi
+
+    call ast_alloc
+
+    pop rdi
+
+    mov qword [rax + NODE_TYPE], AST_PROGRAM
+    mov [rax + NODE_A], rdi
+    ret
+
+; =========================================================
+; ast_init
+; AST arena 초기화
+; =========================================================
+ast_init:
+    lea rax, [rel ast_arena]
+    mov [ast_top], rax
+    mov qword [ast_root], 0
+    ret
+
+; =========================================================
+; ast_alloc
+; 출력:
+;   rax = 새 AST 노드 주소
+; 공간 부족 시 ast_oom
+; =========================================================
+ast_alloc:
+    mov rax, [ast_top]                 ; 이번에 줄 노드 시작 주소
+    lea rcx, [rax + AST_NODE_SIZE]     ; 다음 top
+    lea rdx, [rel ast_arena_end]       ; arena 끝
+
+    cmp rcx, rdx
+    ja  ast_oom
+
+    mov [ast_top], rcx
+
+    xor r8, r8
+    mov [rax + NODE_TYPE], r8
+    mov [rax + NODE_A],    r8
+    mov [rax + NODE_B],    r8
+    mov [rax + NODE_C],    r8
+    mov [rax + NODE_D],    r8
+    mov [rax + NODE_E],    r8
+    ret
+
+; =========================================================
+; ast_oom
+; AST 메모리 부족
+; =========================================================
+ast_oom:
+    mov dl, 'M'
+    call debug_emit_char
+
+    mov rax, SYS_exit
+    mov rdi, 2
+    syscall
+
+ast_dump_root:
+    mov rdi, [ast_root]
+    test rdi, rdi
+    jz .done
+    call ast_dump_node
+.done:
+    ret
+
+ast_dump_node:
+    test rdi, rdi
+    jz .done
+
+    mov rax, [rdi + NODE_TYPE]
+
+    cmp rax, AST_PROGRAM
+    je .program
+
+    cmp rax, AST_BLOCK
+    je .block
+
+    cmp rax, AST_STMT_LIST
+    je .stmt_list
+
+    cmp rax, AST_VAR_DECL
+    je .var_decl
+
+    cmp rax, AST_PRINT
+    je .print
+
+    cmp rax, AST_IF
+    je .if_stmt
+
+    cmp rax, AST_WHILE
+    je .while_stmt
+
+    cmp rax, AST_INT
+    je .int_lit
+
+    cmp rax, AST_IDENT
+    je .ident
+
+    cmp rax, AST_UNARY
+    je .unary
+
+    cmp rax, AST_BINARY
+    je .binary
+
+    mov dl, '?'
+    call debug_emit_char
+    ret
+
+.program:
+    push rdi
+    mov dl, 'P'
+    call debug_emit_char
+    pop rdi
+
+    mov rdi, [rdi + NODE_A]
+    call ast_dump_node
+    ret
+
+.block:
+    push rdi
+    mov dl, 'B'
+    call debug_emit_char
+    pop rdi
+
+    mov rdi, [rdi + NODE_A]
+    call ast_dump_node
+    ret
+
+.stmt_list:
+    push rdi
+    mov dl, 'S'
+    call debug_emit_char
+    pop rdi
+
+    push qword [rdi + NODE_B]   ; next 저장
+    mov rdi, [rdi + NODE_A]     ; stmt
+    call ast_dump_node
+
+    pop rdi                     ; next 복구
+    call ast_dump_node
+    ret
+
+.var_decl:
+    push rdi
+    mov dl, 'V'
+    call debug_emit_char
+    pop rdi
+
+    mov rdi, [rdi + NODE_C]     ; init expr
+    call ast_dump_node
+    ret
+
+.print:
+    push rdi
+    mov dl, 'R'
+    call debug_emit_char
+    pop rdi
+
+    mov rdi, [rdi + NODE_A]
+    call ast_dump_node
+    ret
+
+.if_stmt:
+    push rdi
+    mov dl, 'I'
+    call debug_emit_char
+    pop rdi
+
+    push qword [rdi + NODE_B]   ; then block 저장
+    mov rdi, [rdi + NODE_A]     ; cond
+    call ast_dump_node
+
+    pop rdi
+    call ast_dump_node
+    ret
+
+.while_stmt:
+    push rdi
+    mov dl, 'W'
+    call debug_emit_char
+    pop rdi
+
+    push qword [rdi + NODE_B]   ; body block 저장
+    mov rdi, [rdi + NODE_A]     ; cond
+    call ast_dump_node
+
+    pop rdi
+    call ast_dump_node
+    ret
+
+.int_lit:
+    push rdi
+
+    mov dl, 'N'
+    call debug_emit_char
+    pop rdi
+
+    ret
+
+.ident:
+    push rdi
+
+    mov dl, 'A'
+    call debug_emit_char
+    pop rdi
+    
+    ret
+
+.unary:
+    push rdi
+    mov dl, 'U'
+    call debug_emit_char
+    pop rdi
+
+    mov rdi, [rdi + NODE_B]
+    call ast_dump_node
+    ret
+
+.binary:
+    push rdi
+    mov dl, 'X'
+    call debug_emit_char
+    pop rdi
+
+    push qword [rdi + NODE_C]   ; right 저장
+    mov rdi, [rdi + NODE_B]     ; left
+    call ast_dump_node
+
+    pop rdi
+    call ast_dump_node
+    ret
+
+.done:
+    ret
