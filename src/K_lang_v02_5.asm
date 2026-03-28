@@ -79,7 +79,7 @@ section .data
     ; 파일 입력 대신 메모리 버퍼를 직접 토큰화한다.
     ; ----------------------------------------
     sample_src:
-        db "변수 a = 3; 출력 a;",0
+        db "출력 3 > 1; 출력 1 < 5; 출력 5 >= 6; 출력 3 <= 2;",0
     sample_src_len equ $ - sample_src - 1
     ; ----------------------------------------
     ; 한국어 키워드 (UTF-8 소스 파일 저장 전제)
@@ -138,6 +138,16 @@ section .data
     cg_cqo:             db "    cqo",10,0
     cg_idiv_rbx:        db "    idiv rbx",10,0
     cg_mov_rax_rdx:     db "    mov rax, rdx",10,0
+
+    cg_cmp_rax_rbx:     db "    cmp rax, rbx",10,0
+    cg_mov_eax_0:       db "    mov eax, 0",10,0
+
+    cg_sete_al:         db "    sete al",10,0
+    cg_setne_al:        db "    setne al",10,0
+    cg_setg_al:         db "    setg al",10,0
+    cg_setl_al:         db "    setl al",10,0
+    cg_setge_al:        db "    setge al",10,0
+    cg_setle_al:        db "    setle al",10,0
 
     cg_call_print:      db "    call print_rax_nl",10,0
 
@@ -1103,6 +1113,19 @@ gen_expr:
     cmp rcx, TOK_PERCENT
     je .op_percent
 
+    cmp rcx, TOK_EQ
+    je .op_eq
+    cmp rcx, TOK_NE
+    je .op_ne
+    cmp rcx, TOK_GT
+    je .op_gt
+    cmp rcx, TOK_LT
+    je .op_lt
+    cmp rcx, TOK_GE
+    je .op_ge
+    cmp rcx, TOK_LE
+    je .op_le
+
     jmp cg_fail
 
 .op_plus:
@@ -1149,6 +1172,80 @@ gen_expr:
     lea rdi, [rel cg_idiv_rbx]
     call cg_emit_str
     lea rdi, [rel cg_mov_rax_rdx]
+    call cg_emit_str
+    ret
+
+.op_eq:
+    call emit_compare_eq
+    ret
+
+.op_ne:
+    call emit_compare_ne
+    ret
+
+.op_gt:
+    call emit_compare_gt
+    ret
+
+.op_lt:
+    call emit_compare_lt
+    ret
+
+.op_ge:
+    call emit_compare_ge
+    ret
+
+.op_le:
+    call emit_compare_le
+    ret
+
+emit_compare_common:
+    lea rdi, [rel cg_mov_rbx_rax]
+    call cg_emit_str
+
+    lea rdi, [rel cg_pop_rax]
+    call cg_emit_str
+
+    lea rdi, [rel cg_cmp_rax_rbx]
+    call cg_emit_str
+
+    lea rdi, [rel cg_mov_eax_0]
+    call cg_emit_str
+    ret
+
+emit_compare_eq:
+    call emit_compare_common
+    lea rdi, [rel cg_sete_al]
+    call cg_emit_str
+    ret
+
+emit_compare_ne:
+    call emit_compare_common
+    lea rdi, [rel cg_setne_al]
+    call cg_emit_str
+    ret
+
+emit_compare_gt:
+    call emit_compare_common
+    lea rdi, [rel cg_setg_al]
+    call cg_emit_str
+    ret
+
+emit_compare_lt:
+    call emit_compare_common
+    lea rdi, [rel cg_setl_al]
+    call cg_emit_str
+    ret
+
+emit_compare_ge:
+    call emit_compare_common
+    lea rdi, [rel cg_setge_al]
+    call cg_emit_str
+    ret
+
+emit_compare_le:
+    call emit_compare_common
+    lea rdi, [rel cg_setle_al]
     call cg_emit_str
     ret
 
