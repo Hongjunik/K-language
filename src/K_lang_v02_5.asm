@@ -53,6 +53,7 @@ BITS 64
 %define AST_VAR_DECL   10
 %define AST_PRINT      11
 %define AST_IF         12
+%define AST_WHILE      13
 
 %define AST_INT        20
 %define AST_IDENT      21
@@ -79,7 +80,7 @@ section .data
     ; 파일 입력 대신 메모리 버퍼를 직접 토큰화한다.
     ; ----------------------------------------
     sample_src:
-        db "출력 3 > 1; 출력 1 < 5; 출력 5 >= 6; 출력 3 <= 2;",0
+        db "변수 a = 0; 반복 (a < 3) 동안 { 출력 a; 변수 a = a + 1; } 반복 (변수 i = 0; i < 3; 변수 i = i + 1) { 출력 i; }",0
     sample_src_len equ $ - sample_src - 1
     ; ----------------------------------------
     ; 한국어 키워드 (UTF-8 소스 파일 저장 전제)
@@ -150,6 +151,15 @@ section .data
     cg_setle_al:        db "    setle al",10,0
 
     cg_call_print:      db "    call print_rax_nl",10,0
+
+    cg_test_rax_rax:    db "    test rax, rax",10,0
+    cg_je_head:         db "    je ",0
+    cg_if_false_prefix: db "if_false_",0
+    cg_label_tail:      db ":",10,0
+
+    cg_jmp_head:         db "    jmp ",0
+    cg_while_cond_prefix: db "while_cond_",0
+    cg_while_end_prefix:  db "while_end_",0
 
     ; ----------------------------------------
     ; vars-basic용 slot 이름/선언/저장/로드 helper 문자열
@@ -256,6 +266,8 @@ section .bss
     cg_top          resq 1
     cg_num_tmp      resb 32
 
+    cg_label_seq    resq 1
+
     ; debug 출력 on/off
     debug_enabled   resq 1
 
@@ -320,6 +332,7 @@ lexer_init:
     mov [tok_int_value], rax
     mov [lex_error_code], rax
     mov [sysm_count], rax
+    mov [cg_label_seq], rax
 
     mov qword [cur_line], 1
     mov qword [cur_col], 1
@@ -477,6 +490,28 @@ make_if_node:
     ret
 
 ; =========================================================
+; make_while_node
+; 입력:
+;   rdi = cond ptr
+;   rsi = body block ptr
+; 출력:
+;   rax = 노드 포인터
+; =========================================================
+make_while_node:
+    push rdi
+    push rsi
+
+    call ast_alloc
+
+    pop rsi
+    pop rdi
+
+    mov qword [rax + NODE_TYPE], AST_WHILE
+    mov [rax + NODE_A], rdi
+    mov [rax + NODE_B], rsi
+    ret
+
+; =========================================================
 ; make_stmt_list_node
 ; 입력:
 ;   rdi = stmt ptr
@@ -514,6 +549,50 @@ make_block_node:
 
     mov qword [rax + NODE_TYPE], AST_BLOCK
     mov [rax + NODE_A], rdi
+    ret
+
+; =========================================================
+; block_append_stmt
+; 입력:
+;   rdi = AST_BLOCK ptr
+;   rsi = stmt ptr
+; 출력:
+;   rax = same AST_BLOCK ptr
+; =========================================================
+block_append_stmt:
+    push rdi
+    push rsi
+
+    ; 새 stmt_list 노드 생성: (stmt, next=0)
+    mov rdi, rsi
+    xor rsi, rsi
+    call make_stmt_list_node
+    mov r8, rax
+
+    pop rsi
+    pop rdi
+
+    mov rcx, [rdi + NODE_A]
+    test rcx, rcx
+    jnz .append_to_tail
+
+    ; 빈 block이면 head에 바로 연결
+    mov [rdi + NODE_A], r8
+    mov rax, rdi
+    ret
+
+.append_to_tail:
+.walk:
+    mov rdx, [rcx + NODE_B]
+    test rdx, rdx
+    jz .link_here
+
+    mov rcx, rdx
+    jmp .walk
+
+.link_here:
+    mov [rcx + NODE_B], r8
+    mov rax, rdi
     ret
 
 ; =========================================================
@@ -765,6 +844,88 @@ cg_emit_slot_load_rax:
     call cg_emit_str
     ret
 
+cg_emit_if_false_label_name:
+    push rax
+
+    lea rdi, [rel cg_if_false_prefix]
+    call cg_emit_str
+
+    pop rax
+    call cg_emit_u64_dec
+    ret
+
+cg_emit_if_false_jump:
+    push rax
+
+    lea rdi, [rel cg_je_head]
+    call cg_emit_str
+
+    pop rax
+    call cg_emit_if_false_label_name
+    call cg_emit_nl
+    ret
+
+cg_emit_if_false_decl:
+    call cg_emit_if_false_label_name
+
+    lea rdi, [rel cg_label_tail]
+    call cg_emit_str
+    ret
+
+cg_emit_while_cond_label_name:
+    push rax
+
+    lea rdi, [rel cg_while_cond_prefix]
+    call cg_emit_str
+
+    pop rax
+    call cg_emit_u64_dec
+    ret
+
+cg_emit_while_end_label_name:
+    push rax
+
+    lea rdi, [rel cg_while_end_prefix]
+    call cg_emit_str
+
+    pop rax
+    call cg_emit_u64_dec
+    ret
+
+cg_emit_while_cond_decl:
+    call cg_emit_while_cond_label_name
+    lea rdi, [rel cg_label_tail]
+    call cg_emit_str
+    ret
+
+cg_emit_while_end_decl:
+    call cg_emit_while_end_label_name
+    lea rdi, [rel cg_label_tail]
+    call cg_emit_str
+    ret
+
+cg_emit_while_cond_jump:
+    push rax
+
+    lea rdi, [rel cg_jmp_head]
+    call cg_emit_str
+
+    pop rax
+    call cg_emit_while_cond_label_name
+    call cg_emit_nl
+    ret
+
+cg_emit_while_end_jump_zero:
+    push rax
+
+    lea rdi, [rel cg_je_head]
+    call cg_emit_str
+
+    pop rax
+    call cg_emit_while_end_label_name
+    call cg_emit_nl
+    ret
+
 cg_flush:
     lea rsi, [rel cg_buf]
     mov rdx, [cg_top]
@@ -930,14 +1091,16 @@ cg_emit_all_slot_decls:
     push rdx
 
     xor rcx, rcx
-    mov rdx, [sysm_count]
 
 .loop:
+    mov rdx, [sysm_count]
     cmp rcx, rdx
     jae .done
 
     mov rax, rcx
+    push rcx
     call cg_emit_slot_bss_decl
+    pop rcx
 
     inc rcx
     jmp .loop
@@ -995,6 +1158,118 @@ gen_ident_load:
     call cg_emit_slot_load_rax
     ret
 
+gen_block:
+    mov rax, [rdi + NODE_TYPE]
+    cmp rax, AST_BLOCK
+    jne cg_fail
+
+    mov rdi, [rdi + NODE_A]
+    call gen_stmt_list
+    ret
+
+gen_if_stmt:
+    push rdi
+
+    ; ----------------------------------------
+    ; 1) 조건식 codegen
+    ; AST_IF:
+    ;   NODE_A = cond ptr
+    ;   NODE_B = then block ptr
+    ; ----------------------------------------
+    mov rdi, [rdi + NODE_A]
+    call gen_expr
+
+    ; ----------------------------------------
+    ; 2) 사용할 false 라벨 번호 확보
+    ; rax = label 번호 값
+    ; ----------------------------------------
+    mov rax, [cg_label_seq]
+    inc qword [cg_label_seq]
+    push rax
+
+    ; ----------------------------------------
+    ; 3) 조건이 0이면 false 라벨로 점프
+    ; ----------------------------------------
+    lea rdi, [rel cg_test_rax_rax]
+    call cg_emit_str
+
+    mov rax, [rsp]
+    call cg_emit_if_false_jump
+
+    ; ----------------------------------------
+    ; 4) then block codegen
+    ; [rsp + 8] = 원래 AST_IF 노드 주소
+    ; ----------------------------------------
+    mov rdi, [rsp + 8]
+    mov rdi, [rdi + NODE_B]
+    call gen_block
+
+    ; ----------------------------------------
+    ; 5) false 라벨 선언
+    ; ----------------------------------------
+    mov rax, [rsp]
+    call cg_emit_if_false_decl
+
+    add rsp, 8      ; label id 제거
+    add rsp, 8      ; AST_IF ptr 제거
+    ret
+
+gen_while_stmt:
+    push rdi
+
+    ; ----------------------------------------
+    ; 1) 사용할 라벨 번호 확보
+    ; ----------------------------------------
+    mov rax, [cg_label_seq]
+    inc qword [cg_label_seq]
+    push rax
+
+    ; ----------------------------------------
+    ; 2) while_cond_<n>:
+    ; ----------------------------------------
+    mov rax, [rsp]
+    call cg_emit_while_cond_decl
+
+    ; ----------------------------------------
+    ; 3) 조건식 codegen
+    ; [rsp + 8] = AST_WHILE 노드 주소
+    ; NODE_A = cond ptr
+    ; ----------------------------------------
+    mov rdi, [rsp + 8]
+    mov rdi, [rdi + NODE_A]
+    call gen_expr
+
+    lea rdi, [rel cg_test_rax_rax]
+    call cg_emit_str
+
+    ; 조건이 0이면 while_end_<n> 으로
+    mov rax, [rsp]
+    call cg_emit_while_end_jump_zero
+
+    ; ----------------------------------------
+    ; 4) 본문 block codegen
+    ; NODE_B = body block ptr
+    ; ----------------------------------------
+    mov rdi, [rsp + 8]
+    mov rdi, [rdi + NODE_B]
+    call gen_block
+
+    ; ----------------------------------------
+    ; 5) 다시 while_cond_<n> 로 점프
+    ; ----------------------------------------
+    mov rax, [rsp]
+    call cg_emit_while_cond_jump
+
+    ; ----------------------------------------
+    ; 6) while_end_<n>:
+    ; ----------------------------------------
+    mov rax, [rsp]
+    call cg_emit_while_end_decl
+
+    add rsp, 8      ; label id 제거
+    add rsp, 8      ; AST_WHILE ptr 제거
+    ret
+
 gen_stmt_list:
 .loop:
     test rdi, rdi
@@ -1017,13 +1292,26 @@ gen_stmt_list:
 gen_stmt:
     mov rax, [rdi + NODE_TYPE]
 
+    cmp rax, AST_BLOCK
+    je .block_stmt
+
     cmp rax, AST_VAR_DECL
     je .var_decl_stmt
 
     cmp rax, AST_PRINT
     je .print_stmt
 
+    cmp rax, AST_IF
+    je .if_stmt
+
+    cmp rax, AST_WHILE
+    je .while_stmt
+
     jmp cg_fail
+
+.block_stmt:
+    call gen_block
+    ret
 
 .var_decl_stmt:
     call gen_var_decl
@@ -1031,6 +1319,14 @@ gen_stmt:
 
 .print_stmt:
     call gen_print
+    ret
+
+.if_stmt:
+    call gen_if_stmt
+    ret
+
+.while_stmt:
+    call gen_while_stmt
     ret
 
 gen_print:
@@ -1285,6 +1581,9 @@ ast_dump_node:
     cmp rax, AST_IF
     je .if_stmt
 
+    cmp rax, AST_WHILE
+    je .while_stmt
+
     cmp rax, AST_INT
     je .int_lit
 
@@ -1362,6 +1661,20 @@ ast_dump_node:
     pop rdi
 
     push qword [rdi + NODE_B]   ; then block 저장
+    mov rdi, [rdi + NODE_A]     ; cond
+    call ast_dump_node
+
+    pop rdi
+    call ast_dump_node
+    ret
+
+.while_stmt:
+    push rdi
+    mov dl, 'W'
+    call debug_emit_char
+    pop rdi
+
+    push qword [rdi + NODE_B]   ; body block 저장
     mov rdi, [rdi + NODE_A]     ; cond
     call ast_dump_node
 
@@ -2337,6 +2650,9 @@ parse_stmt:
     cmp rax, TOK_KW_IF
     je .parse_if
 
+    cmp rax, TOK_KW_WHILE
+    je .parse_repeat
+
     jmp parser_error
 
 .parse_var:
@@ -2349,6 +2665,10 @@ parse_stmt:
 
 .parse_if:
     call parse_if_stmt
+    ret
+
+.parse_repeat:
+    call parse_repeat_stmt
     ret
 
 ; =========================================================
@@ -2391,6 +2711,44 @@ parse_var_decl:
     mov dl, 'v'
     call debug_emit_char
     pop rax
+
+    add rsp, 24
+    ret
+
+; =========================================================
+; parse_var_decl_no_semi
+; for 헤더용:
+;   "변수" IDENT "=" expr
+; 마지막 세미콜론은 소비하지 않음
+; 출력:
+;   rax = AST_VAR_DECL ptr
+; =========================================================
+parse_var_decl_no_semi:
+    mov rdi, TOK_KW_VAR
+    call parser_expect
+
+    mov rax, [tok_type]
+    cmp rax, TOK_IDENT
+    jne parser_error
+
+    sub rsp, 24
+    mov rax, [tok_start]
+    mov [rsp], rax
+    mov rax, [tok_len]
+    mov [rsp + 8], rax
+
+    call parser_advance
+
+    mov rdi, TOK_ASSIGN
+    call parser_expect
+
+    call parse_expr
+    mov [rsp + 16], rax
+
+    mov rdi, [rsp]
+    mov rsi, [rsp + 8]
+    mov rdx, [rsp + 16]
+    call make_var_decl_node
 
     add rsp, 24
     ret
@@ -2450,6 +2808,123 @@ parse_if_stmt:
     pop rax
     ret
 
+; =========================================================
+; parse_repeat_stmt
+;
+; 현재 v02 반복문 규칙
+;
+; while:
+;   반복 (조건식) 동안 블록
+;
+; for:
+;   반복 (변수선언; 조건식; 변수선언) 블록
+;
+; 주의:
+; 현재 v02에서는 for의 init/update를 변수선언형으로 제한한다.
+; 따라서 첫 clause가 "변수"로 시작하면 for 후보로 처리한다.
+; while은 ')' 뒤에 반드시 "동안" 이 있어야 한다.
+; for는 ')' 뒤에 "동안" 이 오면 parser_error 로 거부한다.
+;
+; lowering result for for:
+; {
+;   init;
+;   while (cond) {
+;     body;
+;     update;
+;   }
+; }
+; =========================================================
+parse_repeat_stmt:
+    mov rdi, TOK_KW_WHILE         ; "반복"
+    call parser_expect
+
+    mov rdi, TOK_LPAREN
+    call parser_expect
+
+    ; -----------------------------------------------------
+    ; 현재 v02 제한:
+    ; 첫 clause가 "변수"로 시작하면 for 후보
+    ; 아니면 while 후보
+    ; -----------------------------------------------------
+    mov rax, [tok_type]
+    cmp rax, TOK_KW_VAR
+    je .for_candidate
+
+.while_like:
+    ; 반복 (조건식) 동안 { ... }
+    call parse_condition
+    push rax
+
+    mov rdi, TOK_RPAREN
+    call parser_expect
+
+    mov rdi, TOK_KW_DURING
+    call parser_expect
+
+    call parse_block
+    mov rsi, rax
+    pop rdi
+
+    call make_while_node
+    ret
+
+.for_candidate:
+    ; init
+    call parse_var_decl_no_semi
+    push rax
+
+    mov rdi, TOK_SEMI
+    call parser_expect
+
+    ; cond
+    call parse_condition
+    push rax
+
+    mov rdi, TOK_SEMI
+    call parser_expect
+
+    ; update
+    call parse_var_decl_no_semi
+    push rax
+
+    mov rdi, TOK_RPAREN
+    call parser_expect
+
+    ; for에는 "동안" 금지
+    mov rax, [tok_type]
+    cmp rax, TOK_KW_DURING
+    je parser_error
+
+    ; body block
+    call parse_block
+    mov r8, rax                  ; body block ptr
+
+    ; update를 body 끝에 append
+    pop rsi                      ; update stmt ptr
+    mov rdi, r8
+    call block_append_stmt
+    mov r8, rax                  ; updated body block ptr
+
+    ; while(cond) { body; update; }
+    pop rdi                      ; cond expr ptr
+    mov rsi, r8
+    call make_while_node
+    mov r9, rax                  ; while stmt ptr
+
+    ; stmt_list: while 하나
+    mov rdi, r9
+    xor rsi, rsi
+    call make_stmt_list_node
+    mov r10, rax                 ; while stmt_list ptr
+
+    ; 바깥 block: init; while(...)
+    pop rdi                      ; init stmt ptr
+    mov rsi, r10
+    call make_stmt_list_node
+    mov rdi, rax
+    call make_block_node
+    ret
+    
 ; =========================================================
 ; parse_primary
 ; 기본식 ::= IDENT | INT_LITERAL | "(" 표현식 ")"
