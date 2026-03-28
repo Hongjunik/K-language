@@ -6,6 +6,7 @@
 
 %include "src/ast/ast.asm"
 %include "src/codegen/symbols.asm"
+%include "src/codegen/emit.asm"
 %include "src/codegen/codegen.asm"
 %include "src/lexer/lexer.asm"
 %include "src/parser/parser.asm"
