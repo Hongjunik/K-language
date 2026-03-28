@@ -278,23 +278,31 @@ parse_repeat_stmt:
     mov rdi, TOK_LPAREN
     call parser_expect
 
-    ; -----------------------------------------------------
-    ; 현재 v02 제한:
-    ; 첫 clause가 "변수"로 시작하면 for 후보
-    ; 아니면 while 후보
-    ; -----------------------------------------------------
     mov rax, [tok_type]
     cmp rax, TOK_KW_VAR
     je .for_candidate
 
-.while_like:
-    ; 반복 (조건식) 동안 { ... }
+    jmp parse_repeat_while_like
+
+.for_candidate:
+    jmp parse_repeat_for_like
+
+; =========================================================
+; parse_repeat_while_like
+; 입력 상태:
+;   "반복" "(" 까지 이미 소비됨
+;   현재 토큰은 조건식 시작 토큰
+; 출력:
+;   rax = AST_WHILE ptr
+; =========================================================
+parse_repeat_while_like:
     call parse_condition
     push rax
 
     mov rdi, TOK_RPAREN
     call parser_expect
 
+    ; while은 반드시 "동안" 이 있어야 한다.
     mov rdi, TOK_KW_DURING
     call parser_expect
 
@@ -305,7 +313,25 @@ parse_repeat_stmt:
     call make_while_node
     ret
 
-.for_candidate:
+
+; =========================================================
+; parse_repeat_for_like
+; 입력 상태:
+;   "반복" "(" 까지 이미 소비됨
+;   현재 토큰은 init 변수선언 시작 토큰 ("변수")
+; 출력:
+;   rax = AST_BLOCK ptr
+;
+; lowering:
+; {
+;   init;
+;   while (cond) {
+;     body;
+;     update;
+;   }
+; }
+; =========================================================
+parse_repeat_for_like:
     ; init
     call parse_var_decl_no_semi
     push rax
