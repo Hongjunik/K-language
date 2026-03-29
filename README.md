@@ -59,21 +59,66 @@ K-language 컴파일러가 **완전히 링크된 ELF 실행 파일**까지 직�
 
 ---
 
-## 현재 기준선(Baseline)
+## 현재 기준선 (Phase 1 Baseline)
 
-현재 기준 구현은 **`v0.2.4-fixed` 계열**이며,  
-AST에서 생성된 NASM 텍스트를 다시 NASM과 `ld`로 빌드하여  
-최종 실행까지 이어지는 흐름이 검증되었다.
+현재 기준 구현은 `K_lang_v02_5` 계열이며,
+어셈블리 텍스트 생성 파이프라인이 책임별 파일 분리 이후에도 계속 유지되는 상태를 기준선으로 삼는다.
 
-즉 현재는 아래 흐름이 실제로 성공했다.
+현재 실제로 검증된 흐름은 아래와 같다.
 
-```text
-sample_src
-→ lexer
-→ parser
-→ AST
-→ code generator
-→ generated NASM text
-→ nasm
-→ ld
-→ 실행
+    sample_src
+    → lexer
+    → parser
+    → AST
+    → code generator
+    → generated NASM text
+    → nasm
+    → ld
+    → 실행
+
+### 현재 확인된 기능
+- 변수 선언: `변수 x = ...;`
+- 출력: `출력 ...;`
+- 비교 연산: `== != > < >= <=`
+- if 문: `만약 (...) 이면 { ... }`
+- while 문: `반복 (조건식) 동안 { ... }`
+- for-like 문: `반복 (변수선언; 조건식; 변수선언) { ... }`
+  - 내부적으로 `init + while(cond) { body; update; }` 로 lowering됨
+
+### 현재 baseline sample_src 기대 출력
+
+    7
+    100
+    0
+    1
+    2
+    0
+    1
+    2
+
+## 현재 디렉토리 구조 (Phase 1 종료 기준)
+
+- `src/include/`
+  - 공통 정의 허브와 정의 분리 파일
+- `src/main/`
+  - entry / 상태 초기화 / data / bss
+- `src/lexer/`
+  - lexer core / lexer debug
+- `src/parser/`
+  - statement parser / expression parser
+- `src/ast/`
+  - AST build / AST debug
+- `src/codegen/`
+  - symbol helper / emit helper / statement codegen / expression codegen
+- `src/runtime/`
+  - 공통 debug 출력 보조
+
+현재 구조의 목적은 “기능을 유지한 채, 각 파일이 하나의 큰 책임을 갖도록 만드는 것”이다.
+
+## 빌드와 실행
+
+### 로컬
+```bash
+bash scripts/build.sh
+cat build/program_output.txt
+

@@ -1,0 +1,7 @@
+services:
+  k-language:
+    build: .
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    command: bash -lc "bash scripts/build.sh && cat build/program_output.txt"
