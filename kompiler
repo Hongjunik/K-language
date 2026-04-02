@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC="$ROOT_DIR/src/K_lang_v02_5.asm"
+BUILD_DIR="$ROOT_DIR/build"
+
+BOOTSTRAP_O="$BUILD_DIR/K_lang_v02_5.o"
+BOOTSTRAP_BIN="$BUILD_DIR/kc"
+DEBUG_LOG="$BUILD_DIR/kompiler.debug.log"
+
+mkdir -p "$BUILD_DIR"
+
+usage() {
+    cat <<'USAGE'
+사용법:
+  ./kompiler <입력파일.k>
+  ./kompiler -S <입력파일.k>
+  ./kompiler -c <입력파일.k>
+  ./kompiler <입력파일.k> -o <출력파일>
+  ./kompiler -S <입력파일.k> -o <출력.asm>
+  ./kompiler -c <입력파일.k> -o <출력.o>
+USAGE
+}
+
+MODE="link"
+OUTPUT=""
+INPUT=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -S)
+            MODE="asm"
+            shift
+            ;;
+        -c)
+            MODE="obj"
+            shift
+            ;;
+        -o)
+            if [[ $# -lt 2 ]]; then
+                echo "오류: -o 뒤에 출력 파일 이름이 필요합니다." >&2
+                exit 1
+            fi
+            OUTPUT="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "오류: 알 수 없는 옵션입니다: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+        *)
+            if [[ -n "$INPUT" ]]; then
+                echo "오류: 입력 파일은 하나만 지원합니다." >&2
+                exit 1
+            fi
+            INPUT="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$INPUT" ]]; then
+    echo "오류: 입력 .k 파일이 필요합니다." >&2
+    usage >&2
+    exit 1
+fi
+
+if [[ ! -f "$INPUT" ]]; then
+    echo "오류: 입력 파일이 존재하지 않습니다: $INPUT" >&2
+    exit 1
+fi
+
+case "$INPUT" in
+    *.k) ;;
+    *)
+        echo "오류: 현재는 .k 확장자 입력만 지원합니다: $INPUT" >&2
+        exit 1
+        ;;
+esac
+
+INPUT_BASENAME="$(basename "$INPUT")"
+BASE_NAME="${INPUT_BASENAME%.k}"
+
+if [[ "$MODE" == "asm" ]]; then
+    FINAL_ASM="${OUTPUT:-${BASE_NAME}.asm}"
+else
+    FINAL_ASM="$BUILD_DIR/.${BASE_NAME}.generated.asm"
+fi
+
+if [[ "$MODE" == "obj" ]]; then
+    FINAL_OBJ="${OUTPUT:-${BASE_NAME}.o}"
+else
+    FINAL_OBJ="$BUILD_DIR/.${BASE_NAME}.generated.o"
+fi
+
+if [[ "$MODE" == "link" ]]; then
+    FINAL_BIN="${OUTPUT:-a.out}"
+fi
+
+# 1) 어셈블리 컴파일러 자체를 부트스트랩 빌드
+nasm -f elf64 "$SRC" -o "$BOOTSTRAP_O"
+ld -o "$BOOTSTRAP_BIN" "$BOOTSTRAP_O"
+
+# 2) .k -> generated assembly
+mkdir -p "$(dirname "$FINAL_ASM")"
+"$BOOTSTRAP_BIN" "$INPUT" > "$FINAL_ASM" 2> "$DEBUG_LOG"
+
+if [[ "$MODE" == "asm" ]]; then
+    echo "[완료] generated assembly: $FINAL_ASM"
+    exit 0
+fi
+
+# 3) generated assembly -> object
+mkdir -p "$(dirname "$FINAL_OBJ")"
+nasm -f elf64 "$FINAL_ASM" -o "$FINAL_OBJ"
+
+if [[ "$MODE" == "obj" ]]; then
+    echo "[완료] object file: $FINAL_OBJ"
+    exit 0
+fi
+
+# 4) object -> executable
+mkdir -p "$(dirname "$FINAL_BIN")"
+ld -o "$FINAL_BIN" "$FINAL_OBJ"
+
+echo "[완료] executable: $FINAL_BIN"

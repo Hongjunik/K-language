@@ -14,7 +14,8 @@ next_token:
 
     ; EOF 확인
     mov rbx, [cur_off]
-    cmp rbx, sample_src_len
+    mov rax, [src_len]
+    cmp rbx, rax
     jae .emit_eof
 
     ; ----------------------------------------
@@ -45,7 +46,7 @@ next_token:
     jnz .done
 
     ; 현재 문자 로드
-    lea r8, [rel sample_src]
+    mov r8, [src_base]
     mov rbx, [cur_off]
     mov al, [r8 + rbx]
 
@@ -67,7 +68,7 @@ next_token:
 
     ; 현재 문자 다시 읽기
     mov rdx, [cur_off]
-    lea r8, [rel sample_src]
+    mov r8, [src_base]
     mov al, [r8 + rdx]
 
     ; ----------------------------------------
@@ -264,13 +265,13 @@ next_token:
 skip_ws_and_comments:
 .skip_loop:
     mov rbx, [cur_off]
-    cmp rbx, sample_src_len
+    mov rax, [src_len]
+    cmp rbx, rax
     jae .done
 
-    lea r8, [rel sample_src]
+    mov r8, [src_base]
     mov al, [r8 + rbx]
 
-    ; 공백 문자
     cmp al, ' '
     je .skip_one
     cmp al, 9
@@ -280,7 +281,6 @@ skip_ws_and_comments:
     cmp al, 13
     je .skip_one
 
-    ; 주석 시작
     cmp al, '#'
     je .skip_comment
 
@@ -293,13 +293,15 @@ skip_ws_and_comments:
 .skip_comment:
 .comment_loop:
     mov rbx, [cur_off]
-    cmp rbx, sample_src_len
+    mov rax, [src_len]
+    cmp rbx, rax
     jae .done
 
-    lea r8, [rel sample_src]
+    mov r8, [src_base]
     mov al, [r8 + rbx]
     cmp al, 10
     je .skip_loop
+
     call advance_one
     jmp .comment_loop
 
@@ -314,10 +316,11 @@ skip_ws_and_comments:
 ; =========================================================
 advance_one:
     mov rbx, [cur_off]
-    cmp rbx, sample_src_len
+    mov rax, [src_len]
+    cmp rbx, rax
     jae .done
 
-    lea r8, [rel sample_src]
+    mov r8, [src_base]
     mov al, [r8 + rbx]
 
     inc rbx
@@ -346,7 +349,7 @@ advance_one:
 ; =========================================================
 lex_identifier:
     mov r9, [cur_off]
-    lea r10, [rel sample_src]
+    mov r10, [src_base]
     add r10, r9
     xor rcx, rcx
 
@@ -380,7 +383,7 @@ lex_identifier:
 ; =========================================================
 lex_int_literal:
     mov r9, [cur_off]
-    lea r10, [rel sample_src]
+    mov r10, [src_base]
     add r10, r9
 
     xor rcx, rcx            ; 길이
@@ -481,10 +484,11 @@ try_match_keyword:
 
     mov rax, r9
     add rax, rcx
-    cmp rax, sample_src_len
+    mov rdx, [src_len]
+    cmp rax, rdx
     ja .no_match
 
-    lea r10, [rel sample_src]
+    mov r10, [src_base]
     add r10, r9              ; r10 = 현재 입력 위치 주소
 
     xor r11, r11

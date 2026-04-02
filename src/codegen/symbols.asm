@@ -1,14 +1,14 @@
 ; =========================================================
 ; codegen symbol helpers
 ; 역할:
-;   변수 이름(sample_src 기준 offset + len)을 slot(저장 칸) 번호로 매핑하고,
+;   변수 이름(active input buffer 기준 offset + len)을 slot(저장 칸) 번호로 매핑하고,
 ;   generated assembly의 .bss 선언을 끝부분에 추가한다.
 ; =========================================================
 
 ; =========================================================
 ; sym_find_slot_by_name
 ; 입력:
-;   rdi = sample_src 기준 이름 시작 offset
+;   rdi = active input buffer 기준 이름 시작 offset
 ;   rsi = 이름 길이
 ; 출력:
 ;   rax = slot 번호, 없으면 -1
@@ -35,10 +35,10 @@ sym_find_slot_by_name:
 
     mov r9, [sys_name_offs + rax*8]
 
-    lea r10, [rel sample_src]
+    mov r10, [src_base]
     add r10, r9
 
-    lea r11, [rel sample_src]
+    mov r11, [src_base]
     add r11, rdi
 
     mov rdx, rsi
@@ -84,7 +84,7 @@ sym_find_slot_by_name:
 ; =========================================================
 ; sym_intern_slot
 ; 입력:
-;   rdi = sample_src 기준 이름 시작 offset
+;   rdi = active input buffer 기준 이름 시작 offset
 ;   rsi = 이름 길이
 ; 출력:
 ;   rax = 기존 또는 새 slot 번호

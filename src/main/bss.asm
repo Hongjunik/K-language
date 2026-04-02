@@ -6,8 +6,28 @@ section .bss
     cur_line        resq 1    ; 현재 줄 번호 (1부터 시작)
     cur_col         resq 1    ; 현재 열 번호 (v0에서는 바이트 기준)
 
+    ; ----------------------------------------
+    ; 현재 활성 입력 버퍼 상태
+    ; src_base = 현재 컴파일 중인 소스 버퍼의 시작 주소
+    ; src_len  = 현재 소스 버퍼의 총 길이(바이트)
+    ;
+    ; 중요:
+    ; cur_off / tok_start 는 절대주소가 아니라
+    ; src_base 기준 offset(오프셋) 값이다.
+    ; ----------------------------------------
+    src_base        resq 1
+    src_len         resq 1
+
+    ; ----------------------------------------
+    ; 외부 .k 파일 입력 버퍼
+    ; file_src_buf   = 파일 내용을 읽어오는 실제 버퍼
+    ; file_src_bytes = 읽은 바이트 수
+    ; ----------------------------------------
+    file_src_buf    resb 65537
+    file_src_bytes  resq 1
+
     tok_type        resq 1
-    tok_start       resq 1    ; sample_src 기준 시작 오프셋
+    tok_start       resq 1    ; src_base 기준 시작 오프셋
     tok_len         resq 1    ; 토큰 길이(바이트)
     tok_int_value   resq 1    ; INT_LITERAL일 때만 사용
 
@@ -36,7 +56,7 @@ section .bss
 
      ; ----------------------------------------
     ; vars-basic 심볼 테이블
-    ; 이름은 sample_src 기준 offset + len 으로 저장한다.
+    ; 이름은 active input buffer 기준 offset + len 으로 저장한다.
     ; slot 번호는 심볼 인덱스와 동일하게 쓴다.
     ; ----------------------------------------
     sysm_count      resq 1
