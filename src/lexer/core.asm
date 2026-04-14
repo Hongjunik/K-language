@@ -45,6 +45,82 @@ next_token:
     test eax, eax
     jnz .done
 
+    call try_kw_const
+    test eax, eax
+    jnz .done
+
+    call try_kw_unsigned
+    test eax, eax
+    jnz .done
+
+    call try_kw_string
+    test eax, eax
+    jnz .done
+
+    call try_kw_char
+    test eax, eax
+    jnz .done
+
+    call try_kw_bool
+    test eax, eax
+    jnz .done
+
+    call try_kw_byte
+    test eax, eax
+    jnz .done
+
+    call try_kw_addr
+    test eax, eax
+    jnz .done
+
+    call try_kw_void
+    test eax, eax
+    jnz .done
+
+    call try_kw_int128
+    test eax, eax
+    jnz .done
+
+    call try_kw_int64
+    test eax, eax
+    jnz .done
+
+    call try_kw_int32
+    test eax, eax
+    jnz .done
+
+    call try_kw_int16
+    test eax, eax
+    jnz .done
+
+    call try_kw_int8
+    test eax, eax
+    jnz .done
+
+    call try_kw_float128
+    test eax, eax
+    jnz .done
+
+    call try_kw_float64
+    test eax, eax
+    jnz .done
+
+    call try_kw_float32
+    test eax, eax
+    jnz .done
+
+    call try_kw_return
+    test eax, eax
+    jnz .done
+
+    call try_kw_true
+    test eax, eax
+    jnz .done
+
+    call try_kw_false
+    test eax, eax
+    jnz .done
+
     ; 현재 문자 로드
     mov r8, [src_base]
     mov rbx, [cur_off]
@@ -462,6 +538,139 @@ try_kw_during:
     lea rdi, [rel kw_during]
     mov ecx, kw_during_len
     mov r8d, TOK_KW_DURING
+    call try_match_keyword
+    ret
+
+try_kw_const:
+    lea rdi, [rel kw_const]
+    mov ecx, kw_const_len
+    mov r8d, TOK_KW_CONST
+    call try_match_keyword
+    ret
+
+try_kw_unsigned:
+    lea rdi, [rel kw_unsigned]
+    mov ecx, kw_unsigned_len
+    mov r8d, TOK_KW_UNSIGNED
+    call try_match_keyword
+    ret
+
+try_kw_bool:
+    lea rdi, [rel kw_bool]
+    mov ecx, kw_bool_len
+    mov r8d, TOK_KW_BOOL
+    call try_match_keyword
+    ret
+
+try_kw_char:
+    lea rdi, [rel kw_char]
+    mov ecx, kw_char_len
+    mov r8d, TOK_KW_CHAR
+    call try_match_keyword
+    ret
+
+try_kw_string:
+    lea rdi, [rel kw_string]
+    mov ecx, kw_string_len
+    mov r8d, TOK_KW_STRING
+    call try_match_keyword
+    ret
+
+try_kw_byte:
+    lea rdi, [rel kw_byte]
+    mov ecx, kw_byte_len
+    mov r8d, TOK_KW_BYTE
+    call try_match_keyword
+    ret
+
+try_kw_addr:
+    lea rdi, [rel kw_addr]
+    mov ecx, kw_addr_len
+    mov r8d, TOK_KW_ADDR
+    call try_match_keyword
+    ret
+
+try_kw_void:
+    lea rdi, [rel kw_void]
+    mov ecx, kw_void_len
+    mov r8d, TOK_KW_VOID
+    call try_match_keyword
+    ret
+
+try_kw_int8:
+    lea rdi, [rel kw_int8]
+    mov ecx, kw_int8_len
+    mov r8d, TOK_KW_INT8
+    call try_match_keyword
+    ret
+
+try_kw_int16:
+    lea rdi, [rel kw_int16]
+    mov ecx, kw_int16_len
+    mov r8d, TOK_KW_INT16
+    call try_match_keyword
+    ret
+
+try_kw_int32:
+    lea rdi, [rel kw_int32]
+    mov ecx, kw_int32_len
+    mov r8d, TOK_KW_INT32
+    call try_match_keyword
+    ret
+
+try_kw_int64:
+    lea rdi, [rel kw_int64]
+    mov ecx, kw_int64_len
+    mov r8d, TOK_KW_INT64
+    call try_match_keyword
+    ret
+
+try_kw_int128:
+    lea rdi, [rel kw_int128]
+    mov ecx, kw_int128_len
+    mov r8d, TOK_KW_INT128
+    call try_match_keyword
+    ret
+
+try_kw_float32:
+    lea rdi, [rel kw_float32]
+    mov ecx, kw_float32_len
+    mov r8d, TOK_KW_FLOAT32
+    call try_match_keyword
+    ret
+
+try_kw_float64:
+    lea rdi, [rel kw_float64]
+    mov ecx, kw_float64_len
+    mov r8d, TOK_KW_FLOAT64
+    call try_match_keyword
+    ret
+
+try_kw_float128:
+    lea rdi, [rel kw_float128]
+    mov ecx, kw_float128_len
+    mov r8d, TOK_KW_FLOAT128
+    call try_match_keyword
+    ret
+
+try_kw_return:
+    lea rdi, [rel kw_return]
+    mov ecx, kw_return_len
+    mov r8d, TOK_KW_RETURN
+    call try_match_keyword
+    ret
+
+try_kw_true:
+    lea rdi, [rel kw_true]
+    mov ecx, kw_true_len
+    mov r8d, TOK_KW_TRUE
+    call try_match_keyword
+    ret
+
+try_kw_false:
+    lea rdi, [rel kw_false]
+    mov ecx, kw_false_len
+    mov r8d, TOK_KW_FALSE
     call try_match_keyword
     ret
 

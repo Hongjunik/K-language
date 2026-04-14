@@ -22,14 +22,35 @@ BITS 64
 %define TOK_KW_WHILE     14
 %define TOK_KW_DURING    15
 
+%define TOK_KW_CONST     16
+%define TOK_KW_UNSIGNED  17
+%define TOK_KW_BOOL      18
+%define TOK_KW_CHAR      19
+
 %define TOK_IDENT        20
 %define TOK_INT_LITERAL  21
+
+%define TOK_KW_STRING    22
+%define TOK_KW_BYTE      23
+%define TOK_KW_ADDR      24
+%define TOK_KW_VOID      25
+
+%define TOK_KW_INT8      26
+%define TOK_KW_INT16     27
+%define TOK_KW_INT32     28
+%define TOK_KW_INT64     29
 
 %define TOK_SEMI         30
 %define TOK_LPAREN       31
 %define TOK_RPAREN       32
 %define TOK_LBRACE       33
 %define TOK_RBRACE       34
+
+%define TOK_KW_INT128    35
+%define TOK_KW_FLOAT32   36
+%define TOK_KW_FLOAT64   37
+%define TOK_KW_FLOAT128  38
+%define TOK_KW_RETURN    39
 
 %define TOK_ASSIGN       40
 %define TOK_PLUS         41
@@ -44,6 +65,9 @@ BITS 64
 %define TOK_LT           53
 %define TOK_GE           54
 %define TOK_LE           55
+
+%define TOK_KW_TRUE      56
+%define TOK_KW_FALSE     57
 
 ; ============================================
 ; AST Node IDs

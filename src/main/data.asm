@@ -35,6 +35,63 @@ section .data
     kw_during:     db "동안"
     kw_during_len  equ $ - kw_during
 
+    kw_const: db "상수"
+    kw_const_len equ $ - kw_const
+
+    kw_unsigned: db "무부호"
+    kw_unsigned_len equ $ - kw_unsigned
+
+    kw_bool: db "논리"
+    kw_bool_len equ $ - kw_bool
+
+    kw_char: db "문자"
+    kw_char_len equ $ - kw_char
+
+    kw_string: db "문자열"
+    kw_string_len equ $ - kw_string
+
+    kw_byte: db "바이트"
+    kw_byte_len equ $ - kw_byte
+
+    kw_addr: db "주소"
+    kw_addr_len equ $ - kw_addr
+
+    kw_void: db "없음"
+    kw_void_len equ $ - kw_void
+
+    kw_int8: db "바이트정수"
+    kw_int8_len equ $ - kw_int8
+
+    kw_int16: db "짧은정수"
+    kw_int16_len equ $ - kw_int16
+
+    kw_int32: db "정수"
+    kw_int32_len equ $ - kw_int32
+
+    kw_int64: db "긴정수"
+    kw_int64_len equ $ - kw_int64
+
+    kw_int128: db "아주긴정수"
+    kw_int128_len equ $ - kw_int128
+
+    kw_float32: db "홑실수"
+    kw_float32_len equ $ - kw_float32
+
+    kw_float64: db "겹실수"
+    kw_float64_len equ $ - kw_float64
+
+    kw_float128: db "넓은실수"
+    kw_float128_len equ $ - kw_float128
+
+    kw_return: db "반환"
+    kw_return_len equ $ - kw_return
+
+    kw_true: db "참"
+    kw_true_len equ $ - kw_true
+
+    kw_false: db "거짓"
+    kw_false_len equ $ - kw_false
+
     ; 디버그 출력용 버퍼: 한 글자 + 줄바꿈
     debug_buf:     db 0, 10
 
