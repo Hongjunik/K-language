@@ -8,16 +8,149 @@ parser_advance:
 
 ; =========================================================
 ; parser_expect
-; 입력:
-;   rdi = 기대하는 토큰 ID
-; 현재 토큰이 rdi와 같으면 다음 토큰으로 이동
-; 다르면 parser_error
+; rdi = expected token
+; 현재 tok_type 과 비교 후 맞으면 advance
 ; =========================================================
 parser_expect:
     mov rax, [tok_type]
     cmp rax, rdi
     jne parser_error
     call parser_advance
+    ret
+
+; =========================================================
+; parser_is_type_token
+; 현재 tok_type 이 자료형 시작 토큰이면 eax = 1
+; 아니면 eax = 0
+; =========================================================
+parser_is_type_token:
+    mov rax, [tok_type]
+
+    cmp rax, TOK_KW_BOOL
+    je .yes
+    cmp rax, TOK_KW_CHAR
+    je .yes
+    cmp rax, TOK_KW_STRING
+    je .yes
+    cmp rax, TOK_KW_BYTE
+    je .yes
+    cmp rax, TOK_KW_ADDR
+    je .yes
+    cmp rax, TOK_KW_VOID
+    je .yes
+
+    cmp rax, TOK_KW_INT8
+    je .yes
+    cmp rax, TOK_KW_INT16
+    je .yes
+    cmp rax, TOK_KW_INT32
+    je .yes
+    cmp rax, TOK_KW_INT64
+    je .yes
+    cmp rax, TOK_KW_INT128
+    je .yes
+
+    cmp rax, TOK_KW_FLOAT32
+    je .yes
+    cmp rax, TOK_KW_FLOAT64
+    je .yes
+    cmp rax, TOK_KW_FLOAT128
+    je .yes
+
+    xor eax, eax
+    ret
+
+.yes:
+    mov eax, 1
+    ret
+
+; =========================================================
+; parser_is_decl_start
+; 현재 tok_type 이 선언문 시작 토큰이면 eax = 1
+; 아니면 eax = 0
+; 허용:
+;   변수 ...
+;   상수 ...
+;   무부호 ...
+;   자료형 ...
+; =========================================================
+parser_is_decl_start:
+    mov rax, [tok_type]
+
+    cmp rax, TOK_KW_VAR
+    je .yes
+    cmp rax, TOK_KW_CONST
+    je .yes
+    cmp rax, TOK_KW_UNSIGNED
+    je .yes
+
+    call parser_is_type_token
+    test eax, eax
+    jnz .yes
+
+    xor eax, eax
+    ret
+
+.yes:
+    mov eax, 1
+    ret
+
+; =========================================================
+; parser_consume_decl_prefix
+; 선언문 앞부분 prefix 를 소비한다.
+;
+; 허용:
+;   변수 x = ...
+;   정수 x = ...
+;   상수 정수 x = ...
+;   무부호 정수 x = ...
+;   변수 상수 정수 x = ...
+;
+; 현재 단계에서는 타입/수식어를 AST에 저장하지 않고
+; parser 진입만 통과시키는 것이 목적이다.
+; =========================================================
+parser_consume_decl_prefix:
+    xor ecx, ecx    ; saw_var
+    xor edx, edx    ; saw_modifier
+
+    mov rax, [tok_type]
+    cmp rax, TOK_KW_VAR
+    jne .mods
+    mov ecx, 1
+    call parser_advance
+
+.mods:
+.mod_loop:
+    mov rax, [tok_type]
+    cmp rax, TOK_KW_CONST
+    je .eat_mod
+    cmp rax, TOK_KW_UNSIGNED
+    je .eat_mod
+    jmp .after_mods
+
+.eat_mod:
+    mov edx, 1
+    call parser_advance
+    jmp .mod_loop
+
+.after_mods:
+    call parser_is_type_token
+    test eax, eax
+    jz .no_type
+
+    call parser_advance
+    ret
+
+.no_type:
+    ; 과거 호환:
+    ; "변수 x = ..." 는 허용
+    ; 하지만 "상수 x = ..." / "무부호 x = ..." 는 금지
+    test ecx, ecx
+    jz parser_error
+
+    test edx, edx
+    jnz parser_error
+
     ret
 
 ; =========================================================
@@ -61,7 +194,6 @@ parse_program:
 .success:
     mov rdi, [rsp]
     call make_program_node
-
     mov [ast_root], rax
 
     push rax
@@ -73,23 +205,20 @@ parse_program:
     ret
 
 ; =========================================================
-; parse_stmt
-; 문장 ::= 변수선언문 | 출력문
+; 문장 ::= 선언문 | 출력문 | 조건문 | 반복문
 ; =========================================================
 parse_stmt:
-    mov rax, [tok_type]
-    cmp rax, TOK_KW_VAR
-    je .parse_var
+    call parser_is_decl_start
+    test eax, eax
+    jnz .parse_var
 
+    mov rax, [tok_type]
     cmp rax, TOK_KW_PRINT
     je .parse_print
-
     cmp rax, TOK_KW_IF
     je .parse_if
-
     cmp rax, TOK_KW_WHILE
     je .parse_repeat
-
     jmp parser_error
 
 .parse_var:
@@ -109,15 +238,13 @@ parse_stmt:
     ret
 
 ; =========================================================
-; parse_var_decl
-; 변수선언문 ::= "변수" IDENT "=" INT_LITERAL ";"
-; 기존 INT_LITERAL 고정에서 parse_expr로 확장
+; 선언문 ::= [변수] [상수|무부호]* [자료형] IDENT "=" 표현식 ";"
+; 과거 호환:
+;   변수 IDENT "=" 표현식 ";"
 ; =========================================================
 parse_var_decl:
-    mov rdi, TOK_KW_VAR
-    call parser_expect
+    call parser_consume_decl_prefix
 
-    ; IDENT는 이름 정보를 저장해야 하므로 직접 처리
     mov rax, [tok_type]
     cmp rax, TOK_IDENT
     jne parser_error
@@ -141,8 +268,8 @@ parse_var_decl:
 
     mov rdi, [rsp]
     mov rsi, [rsp + 8]
-    mov rdx, [rsp +16]
-    call make_var_decl_node              ; rax = AST_VAR_DECL
+    mov rdx, [rsp + 16]
+    call make_var_decl_node
 
     push rax
     mov dl, 'v'
@@ -153,16 +280,11 @@ parse_var_decl:
     ret
 
 ; =========================================================
-; parse_var_decl_no_semi
-; for 헤더용:
-;   "변수" IDENT "=" expr
-; 마지막 세미콜론은 소비하지 않음
-; 출력:
-;   rax = AST_VAR_DECL ptr
+; 세미콜론 없는 선언문
+; for-like 헤더의 init / update 용
 ; =========================================================
 parse_var_decl_no_semi:
-    mov rdi, TOK_KW_VAR
-    call parser_expect
+    call parser_consume_decl_prefix
 
     mov rax, [tok_type]
     cmp rax, TOK_IDENT
@@ -191,31 +313,24 @@ parse_var_decl_no_semi:
     ret
 
 ; =========================================================
-; parse_print_stmt
-; 출력문 ::= "출력" 기본식 ";"
+; 출력문 ::= "출력" 표현식 ";"
 ; =========================================================
 parse_print_stmt:
     mov rdi, TOK_KW_PRINT
     call parser_expect
 
-    call parse_expr         ; rax = expr
+    call parse_expr
     push rax
 
     mov rdi, TOK_SEMI
     call parser_expect
 
     pop rdi
-    call make_print_node    ; rax = AST_PRINT
-
-    push rax
-    mov dl, 'p'
-    call debug_emit_char
-    pop rax
+    call make_print_node
     ret
 
 ; =========================================================
-; parse_if_stmt
-; 만약문 ::= "만약" "(" 조건식 ")" "이면" 블록
+; 조건문 ::= "만약" "(" 표현식 ")" "이면" 블록
 ; =========================================================
 parse_if_stmt:
     mov rdi, TOK_KW_IF
@@ -224,7 +339,7 @@ parse_if_stmt:
     mov rdi, TOK_LPAREN
     call parser_expect
 
-    call parse_condition            ; rax = cond
+    call parse_expr
     push rax
 
     mov rdi, TOK_RPAREN
@@ -233,54 +348,31 @@ parse_if_stmt:
     mov rdi, TOK_KW_THEN
     call parser_expect
 
-    call parse_block                ; rax = block
+    call parse_block
     mov rsi, rax
-    pop rdi                         ; cond
 
-    call make_if_node               ; rax = AST_IF
-
-    push rax
-    mov dl, 'i'
-    call debug_emit_char
-    pop rax
+    pop rdi
+    call make_if_node
     ret
 
 ; =========================================================
-; parse_repeat_stmt
+; 반복문
+; while-like:
+;   반복 (조건식) 동안 { ... }
 ;
-; 현재 v02 반복문 규칙
-;
-; while:
-;   반복 (조건식) 동안 블록
-;
-; for:
-;   반복 (변수선언; 조건식; 변수선언) 블록
-;
-; 주의:
-; 현재 v02에서는 for의 init/update를 변수선언형으로 제한한다.
-; 따라서 첫 clause가 "변수"로 시작하면 for 후보로 처리한다.
-; while은 ')' 뒤에 반드시 "동안" 이 있어야 한다.
-; for는 ')' 뒤에 "동안" 이 오면 parser_error 로 거부한다.
-;
-; lowering result for for:
-; {
-;   init;
-;   while (cond) {
-;     body;
-;     update;
-;   }
-; }
+; for-like:
+;   반복 (선언문; 조건식; 선언문) { ... }
 ; =========================================================
 parse_repeat_stmt:
-    mov rdi, TOK_KW_WHILE         ; "반복"
+    mov rdi, TOK_KW_WHILE
     call parser_expect
 
     mov rdi, TOK_LPAREN
     call parser_expect
 
-    mov rax, [tok_type]
-    cmp rax, TOK_KW_VAR
-    je .for_candidate
+    call parser_is_decl_start
+    test eax, eax
+    jnz .for_candidate
 
     jmp parse_repeat_while_like
 

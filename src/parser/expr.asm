@@ -5,16 +5,16 @@
 ; =========================================================
 parse_primary:
     mov rax, [tok_type]
-
     cmp rax, TOK_IDENT
     je .accept_ident
-
     cmp rax, TOK_INT_LITERAL
     je .accept_int
-
+    cmp rax, TOK_KW_TRUE
+    je .accept_true
+    cmp rax, TOK_KW_FALSE
+    je .accept_false
     cmp rax, TOK_LPAREN
     je .accept_paren
-
     jmp parser_error
 
 .accept_ident:
@@ -33,18 +33,33 @@ parse_primary:
     pop rax
     ret
 
+.accept_true:
+    call debug_emit_token_char
+    mov qword [tok_int_value], 1
+    call make_int_node
+    push rax
+    call parser_advance
+    pop rax
+    ret
+
+.accept_false:
+    call debug_emit_token_char
+    mov qword [tok_int_value], 0
+    call make_int_node
+    push rax
+    call parser_advance
+    pop rax
+    ret
+
 .accept_paren:
     ; 괄호 시작
     mov dl, '<'
     call debug_emit_char
-
     call parser_advance
     call parse_expr
-
     push rax
     mov rdi, TOK_RPAREN
     call parser_expect
-
     ; 괄호 끝
     mov dl, '>'
     call debug_emit_char
