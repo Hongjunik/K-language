@@ -103,10 +103,14 @@ make_print_node:
 
 ; =========================================================
 ; make_var_decl_node
+;
 ; 입력:
-;   rdi = ident start
+;   rdi = ident start offset
 ;   rsi = ident len
 ;   rdx = init expr ptr
+;   rcx = type id
+;   r8  = modifier flags
+;
 ; 출력:
 ;   rax = 노드 포인터
 ; =========================================================
@@ -114,17 +118,23 @@ make_var_decl_node:
     push rdi
     push rsi
     push rdx
+    push rcx
+    push r8
 
     call ast_alloc
-    
+
+    pop r8
+    pop rcx
     pop rdx
     pop rsi
     pop rdi
 
     mov qword [rax + NODE_TYPE], AST_VAR_DECL
-    mov [rax + NODE_A], rdi
-    mov [rax + NODE_B], rsi
-    mov [rax + NODE_C], rdx
+    mov [rax + VAR_DECL_NAME_OFF],  rdi
+    mov [rax + VAR_DECL_NAME_LEN],  rsi
+    mov [rax + VAR_DECL_INIT_EXPR], rdx
+    mov [rax + VAR_DECL_TYPE_ID],   rcx
+    mov [rax + VAR_DECL_MOD_FLAGS], r8
     ret
 
 ; =========================================================

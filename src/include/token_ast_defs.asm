@@ -85,3 +85,31 @@ BITS 64
 %define AST_IDENT      21
 %define AST_UNARY      22
 %define AST_BINARY     23
+
+; ============================================
+; Type IDs
+; ============================================
+%define TYPE_UNKNOWN   0
+%define TYPE_BOOL      1
+%define TYPE_CHAR      2
+%define TYPE_STRING    3
+%define TYPE_BYTE      4
+%define TYPE_ADDR      5
+%define TYPE_VOID      6
+
+%define TYPE_INT8      10
+%define TYPE_INT16     11
+%define TYPE_INT32     12
+%define TYPE_INT64     13
+%define TYPE_INT128    14
+
+%define TYPE_FLOAT32   20
+%define TYPE_FLOAT64   21
+%define TYPE_FLOAT128  22
+
+; ============================================
+; Type modifier flags
+; ============================================
+%define MODF_NONE      0
+%define MODF_CONST     1
+%define MODF_UNSIGNED  2

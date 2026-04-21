@@ -1,3 +1,12 @@
+; =========================================================
+; AST_VAR_DECL field aliases
+; =========================================================
+%define VAR_DECL_NAME_OFF   NODE_A
+%define VAR_DECL_NAME_LEN   NODE_B
+%define VAR_DECL_INIT_EXPR  NODE_C
+%define VAR_DECL_TYPE_ID    NODE_D
+%define VAR_DECL_MOD_FLAGS  NODE_E
+
 ; --------------------------------------------
 ; 공통 노드 레이아웃 (48 bytes)
 ; --------------------------------------------

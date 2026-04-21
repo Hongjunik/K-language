@@ -32,18 +32,21 @@ gen_program:
 ; =========================================================
 gen_var_decl:
     push rdi
-
     mov rdi, [rdi + NODE_C]
     call gen_expr
-
     pop rdi
+
+    ; 현재 단계에서는 타입/수식어를 읽기만 하고
+    ; 동작 변화는 아직 주지 않는다.
+    mov r8, [rdi + NODE_D]   ; type id
+    mov r9, [rdi + NODE_E]   ; modifier flags
 
     mov rcx, [rdi + NODE_A]
     mov rdx, [rdi + NODE_B]
+
     mov rdi, rcx
     mov rsi, rdx
     call sym_intern_slot
-
     call cg_emit_slot_store_rax
     ret
 

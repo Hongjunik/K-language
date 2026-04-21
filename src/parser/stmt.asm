@@ -65,6 +65,95 @@ parser_is_type_token:
     ret
 
 ; =========================================================
+; parser_type_id_from_current_token
+; 현재 tok_type 을 TYPE_* 값으로 바꾼다.
+; 출력:
+;   eax = TYPE_* 값
+;   자료형 토큰이 아니면 TYPE_UNKNOWN(0)
+; =========================================================
+parser_type_id_from_current_token:
+    mov rax, [tok_type]
+
+    cmp rax, TOK_KW_BOOL
+    je .bool_t
+    cmp rax, TOK_KW_CHAR
+    je .char_t
+    cmp rax, TOK_KW_STRING
+    je .string_t
+    cmp rax, TOK_KW_BYTE
+    je .byte_t
+    cmp rax, TOK_KW_ADDR
+    je .addr_t
+    cmp rax, TOK_KW_VOID
+    je .void_t
+
+    cmp rax, TOK_KW_INT8
+    je .int8_t
+    cmp rax, TOK_KW_INT16
+    je .int16_t
+    cmp rax, TOK_KW_INT32
+    je .int32_t
+    cmp rax, TOK_KW_INT64
+    je .int64_t
+    cmp rax, TOK_KW_INT128
+    je .int128_t
+
+    cmp rax, TOK_KW_FLOAT32
+    je .float32_t
+    cmp rax, TOK_KW_FLOAT64
+    je .float64_t
+    cmp rax, TOK_KW_FLOAT128
+    je .float128_t
+
+    xor eax, eax
+    ret
+
+.bool_t:
+    mov eax, TYPE_BOOL
+    ret
+.char_t:
+    mov eax, TYPE_CHAR
+    ret
+.string_t:
+    mov eax, TYPE_STRING
+    ret
+.byte_t:
+    mov eax, TYPE_BYTE
+    ret
+.addr_t:
+    mov eax, TYPE_ADDR
+    ret
+.void_t:
+    mov eax, TYPE_VOID
+    ret
+
+.int8_t:
+    mov eax, TYPE_INT8
+    ret
+.int16_t:
+    mov eax, TYPE_INT16
+    ret
+.int32_t:
+    mov eax, TYPE_INT32
+    ret
+.int64_t:
+    mov eax, TYPE_INT64
+    ret
+.int128_t:
+    mov eax, TYPE_INT128
+    ret
+
+.float32_t:
+    mov eax, TYPE_FLOAT32
+    ret
+.float64_t:
+    mov eax, TYPE_FLOAT64
+    ret
+.float128_t:
+    mov eax, TYPE_FLOAT128
+    ret
+
+; =========================================================
 ; parser_is_decl_start
 ; 현재 tok_type 이 선언문 시작 토큰이면 eax = 1
 ; 아니면 eax = 0
@@ -110,8 +199,9 @@ parser_is_decl_start:
 ; parser 진입만 통과시키는 것이 목적이다.
 ; =========================================================
 parser_consume_decl_prefix:
-    xor ecx, ecx    ; saw_var
-    xor edx, edx    ; saw_modifier
+    xor ecx, ecx          ; saw_var
+    xor edx, edx          ; modifier flags
+    xor eax, eax          ; default TYPE_UNKNOWN
 
     mov rax, [tok_type]
     cmp rax, TOK_KW_VAR
@@ -123,13 +213,18 @@ parser_consume_decl_prefix:
 .mod_loop:
     mov rax, [tok_type]
     cmp rax, TOK_KW_CONST
-    je .eat_mod
+    je .eat_const
     cmp rax, TOK_KW_UNSIGNED
-    je .eat_mod
+    je .eat_unsigned
     jmp .after_mods
 
-.eat_mod:
-    mov edx, 1
+.eat_const:
+    or edx, MODF_CONST
+    call parser_advance
+    jmp .mod_loop
+
+.eat_unsigned:
+    or edx, MODF_UNSIGNED
     call parser_advance
     jmp .mod_loop
 
@@ -138,7 +233,12 @@ parser_consume_decl_prefix:
     test eax, eax
     jz .no_type
 
+    call parser_type_id_from_current_token
+    push rax
+    push rdx
     call parser_advance
+    pop rdx
+    pop rax
     ret
 
 .no_type:
@@ -151,6 +251,8 @@ parser_consume_decl_prefix:
     test edx, edx
     jnz parser_error
 
+    xor eax, eax          ; TYPE_UNKNOWN
+    xor edx, edx          ; MODF_NONE
     ret
 
 ; =========================================================
@@ -243,13 +345,16 @@ parse_stmt:
 ;   변수 IDENT "=" 표현식 ";"
 ; =========================================================
 parse_var_decl:
+    sub rsp, 40
+
     call parser_consume_decl_prefix
+    mov [rsp + 24], rax      ; type id
+    mov [rsp + 32], rdx      ; modifier flags
 
     mov rax, [tok_type]
     cmp rax, TOK_IDENT
     jne parser_error
 
-    sub rsp, 24
     mov rax, [tok_start]
     mov [rsp], rax
     mov rax, [tok_len]
@@ -269,6 +374,8 @@ parse_var_decl:
     mov rdi, [rsp]
     mov rsi, [rsp + 8]
     mov rdx, [rsp + 16]
+    mov rcx, [rsp + 24]
+    mov r8,  [rsp + 32]
     call make_var_decl_node
 
     push rax
@@ -276,7 +383,7 @@ parse_var_decl:
     call debug_emit_char
     pop rax
 
-    add rsp, 24
+    add rsp, 40
     ret
 
 ; =========================================================
@@ -284,13 +391,16 @@ parse_var_decl:
 ; for-like 헤더의 init / update 용
 ; =========================================================
 parse_var_decl_no_semi:
+    sub rsp, 40
+
     call parser_consume_decl_prefix
+    mov [rsp + 24], rax      ; type id
+    mov [rsp + 32], rdx      ; modifier flags
 
     mov rax, [tok_type]
     cmp rax, TOK_IDENT
     jne parser_error
 
-    sub rsp, 24
     mov rax, [tok_start]
     mov [rsp], rax
     mov rax, [tok_len]
@@ -307,9 +417,11 @@ parse_var_decl_no_semi:
     mov rdi, [rsp]
     mov rsi, [rsp + 8]
     mov rdx, [rsp + 16]
+    mov rcx, [rsp + 24]
+    mov r8,  [rsp + 32]
     call make_var_decl_node
 
-    add rsp, 24
+    add rsp, 40
     ret
 
 ; =========================================================

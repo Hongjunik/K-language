@@ -11,15 +11,15 @@ PROGRAM_OUTPUT="$BUILD_DIR/program_output.txt"
 mkdir -p "$BUILD_DIR"
 
 cat > "$INPUT_K" <<'EOF'
-변수 x = 7;
+정수 x = 7;
 출력 x;
 
 만약 (3 > 1) 이면 { 출력 100; }
 
-변수 a = 0;
-반복 (a < 3) 동안 { 출력 a; 변수 a = a + 1; }
+정수 a = 0;
+반복 (a < 3) 동안 { 출력 a; 정수 a = a + 1; }
 
-반복 (변수 i = 0; i < 3; 변수 i = i + 1) { 출력 i; }
+반복 (정수 i = 0; i < 3; 정수 i = i + 1) { 출력 i; }
 EOF
 
 echo "[1/4] run kompiler -> generated assembly"
