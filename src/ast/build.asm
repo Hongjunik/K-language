@@ -288,9 +288,21 @@ make_program_node:
 ; AST arena 초기화
 ; =========================================================
 ast_init:
+    ; [데이터 이동] rax <- RIP ast_arena(AST_ARENA_SIZE 65536 byte)
+    ; [기능] rax에 현재 실행 중인 코드를 기준으로
+    ; 오프셋을 계산한 절대 주소를 넣는다.
+    ; [추신] 즉 ast구역이 시작하는 메모리 시작 주소를 rax에 저장한다.
     lea rax, [rel ast_arena]
+
+    ; [데이터 이동] ast_top <-(cp) rax(RIP ast_arena)
+    ; [기능] AST 구역의 메모리 시작 주소를 저장한다.
     mov [ast_top], rax
+
+    ; [데이터 이동] qword ast_root <-(cp) 0
+    ; [기능] AST 루트 포인터를 NULL(0)로 초기화
     mov qword [ast_root], 0
+
+    ; [기능] call ast_init(entry.asm)으로 리턴
     ret
 
 ; =========================================================

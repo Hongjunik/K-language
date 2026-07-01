@@ -261,6 +261,7 @@ parser_consume_decl_prefix:
 ; =========================================================
 parse_program:
     ; 첫 토큰 준비
+    
     call parser_advance
 
     sub rsp, 16

@@ -36,7 +36,10 @@ section .bss
     ; ----------------------------------------
     ; AST 상태
     ; ----------------------------------------
-    ast_arena       resb AST_ARENA_SIZE
+    ; [설명] AST 구역
+    ; 크기는 AST_ARENA_SIZE(65536 byte)의 초기화 되지 않은 정적변수
+    ast_arena:  
+        resb AST_ARENA_SIZE
     ast_arena_end:
     ast_top         resq 1
     ast_root        resq 1

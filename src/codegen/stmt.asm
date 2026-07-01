@@ -31,6 +31,14 @@ gen_program:
 ;   를 추가
 ; =========================================================
 gen_var_decl:
+    ; --------------------------------------------
+    ; 현재 선언문의 type / modifier를 먼저 읽는다.
+    ; 아직 정책 적용은 하지 않고,
+    ; 내부 계약이 실제 codegen까지 들어왔는지만 확인한다.
+    ; --------------------------------------------
+    mov r10, [rdi + VAR_DECL_TYPE_ID]
+    mov r11, [rdi + VAR_DECL_MOD_FLAGS]
+
     push rdi
     mov rdi, [rdi + NODE_C]
     call gen_expr

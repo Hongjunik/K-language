@@ -10,9 +10,20 @@ next_token:
     mov qword [tok_int_value], 0
     mov qword [lex_error_code], 0
 
+    ; 1byte씩 파싱하며 공백/줄바꿈을 제거
     call skip_ws_and_comments
 
     ; EOF 확인
+    ; ==========================
+    ; [데이터 이동]
+    ; rbx <-(cp) cur_off
+    ; rax <-(cp) src_len
+    ; [연산]
+    ; rbx - rax
+    ; [기능]
+    ; rbx <= rax이면 emit_eof로 점프한다.
+    ; 파일이 끝났는지 다시 판단한다.
+    ; ==========================
     mov rbx, [cur_off]
     mov rax, [src_len]
     cmp rbx, rax
@@ -338,25 +349,70 @@ next_token:
 ; skip_ws_and_comments
 ; 공백 / 줄바꿈 / # 주석 건너뛰기
 ; =========================================================
+// ANCHOR: LEXER_SKIP_WS_AND_COMMENTS_CURRENT_STRUCTURE
+// NOTE: 현재 skip_ws_and_comments는 이름상 공백/주석 제거 루틴이지만,
+;       내부에서 src_base + cur_off 위치의 현재 바이트를 직접 읽는다.
+;       즉 "현재 바이트 읽기"와 "공백/주석 판정" 책임이 한 레이블에 섞여 있다.
+;
+// REVIEW: 리팩토링 시 아래 구조로 분리하는 것을 검토한다.
+;         1. lexer_peek_byte:
+;            - 입력:  [src_base], [cur_off]
+;            - 출력:  al = byte [src_base + cur_off]
+;            - 역할:  현재 위치의 1바이트만 읽고 cur_off는 바꾸지 않는다.
+;
+;         2. lexer_advance_byte:
+;            - 입력:  [cur_off]
+;            - 출력:  [cur_off] = [cur_off] + 1
+;            - 역할:  현재 입력 위치를 다음 바이트로 이동한다.
+;
+;         3. skip_ws_and_comments:
+;            - lexer_peek_byte로 현재 바이트를 확인한다.
+;            - CH_SPACE / CH_TAB / CH_LF / CH_CR이면 lexer_advance_byte 후 반복한다.
+;            - CH_HASH이면 주석 끝까지 이동한다.
+;            - 그 외 바이트면 실제 token 시작 위치로 보고 종료한다.
+;
+; TODO(refactor): 공백/제어문자 비교값을 직접 숫자 9, 10, 13으로 두지 말고
+;                 CH_TAB=0x09, CH_LF=0x0A, CH_CR=0x0D 같은 상수로 분리한다.
+;
+// NOTE: 현재 구조는 동작상 문제는 없지만, lexer가 커질수록
+;       "입력 바이트 로드", "공백 판정", "주석 처리", "토큰 판정"의 경계가 흐려질 수 있다.
+;       따라서 기능 추가보다 리팩토링 단계에서 책임 분리를 우선 검토한다.
+
 skip_ws_and_comments:
 .skip_loop:
+    ; [데이터 이동] rbx <-(cp) cur_off(현재 오프셋)
     mov rbx, [cur_off]
+
+    ; [데이터 이동] rax <-(cp) src_len(읽은 바이트 수)
     mov rax, [src_len]
+    ; [연산] rbx(cur_off) - rax(src_len)
+    ; [기능] 현재의 오프셋과 읽은 바이트 수와 비교하여
+    ; 파싱이 가능한지 판단한다.
     cmp rbx, rax
+    ; [기능] rbx >= rax면 .done으로 점프한다.(ZF, CF)
     jae .done
 
+    ; [데이터 이동] r8 <-(cp) src_base(소스 버퍼 시작 주소)
     mov r8, [src_base]
+    ; [데이터 이동] al <-(cp) r8(src_base) + rbx(cur_off)
+    ; [기능] al에 r8 + rbx의 주소부터 8bit의 내용을 가져온다.
     mov al, [r8 + rbx]
 
-    cmp al, ' '
+    ; ====================================
+    ; 공백 건너뛰기 부분 *유니코드 테이블 참조*
+    ; ====================================
+    cmp al, ' '     ; space
     je .skip_one
-    cmp al, 9
+    cmp al, 9       ; tab
     je .skip_one
-    cmp al, 10
+    cmp al, 10      ; LF(Line Feed) 줄 그대로 커서를 밑으로 내림
     je .skip_one
-    cmp al, 13
+    cmp al, 13      ; CR(Carriage Return) 커서를 줄 첫부분으로 이동
     je .skip_one
 
+    ; ===============
+    ; 주석 건너뛰기 부분
+    ; ===============
     cmp al, '#'
     je .skip_comment
 
@@ -399,19 +455,36 @@ advance_one:
     mov r8, [src_base]
     mov al, [r8 + rbx]
 
+    ; [연산] rbx(cur_off)++
     inc rbx
+    ; [데이터 이동] cur_off <-(cp) rbx(cur_off + 1)
     mov [cur_off], rbx
 
+    ; [연산] al - 10
+    ; [기능] 현재 바이트가 LF(new line)인지 판단한다.
     cmp al, 10
     jne .not_newline
 
+    ; =================
+    ; 줄바꿈
+    ; 행 + 1 / 열 = 1
+    ; =================
+
+    ; [데이터 이동] rax <-(cp) cur_line
     mov rax, [cur_line]
+    ; [연산] rax(cur_line)++
     inc rax
+    ; [데이터 이동] cur_line <-(cp) rax(cur_line + 1)
     mov [cur_line], rax
+    ; [데이터 이동] cur_col <-(cp) 1
     mov qword [cur_col], 1
     ret
 
 .not_newline:
+    ; ================
+    ; 줄바꿈 X
+    ; 열 + 1
+    ; ================
     mov rax, [cur_col]
     inc rax
     mov [cur_col], rax
@@ -499,7 +572,14 @@ lex_int_literal:
 ; 한국어 키워드 검사 래퍼들
 ; eax = 1 이면 매칭 성공, 0이면 실패
 ; =========================================================
+//ANCHOR - *키워드 검사 후에 다음에 올 것을 올 수 있는게 맞는지 검사하는 단계*
 try_kw_var:
+    ; --------------------------------
+    ; [데이터 이동]
+    ; rdi <- RIP_rel kw_var(kw_var의 메모리 시작 주소)
+    ; ecx <-(cp) kw_var_len
+    ; r8d <-(cp) TOK_KW_VAR(10)
+    ; --------------------------------
     lea rdi, [rel kw_var]
     mov ecx, kw_var_len
     mov r8d, TOK_KW_VAR
@@ -702,6 +782,11 @@ try_match_keyword:
 
     xor r11, r11
 .compare_loop:
+; ================================
+; r11을 1씩 증가시키며 예약어와 비교
+; 여기서 중요한거는 바이트를 비트의 배열처럼 사용되고 있다는 거
+; ================================
+
     cmp r11, rcx
     je .bytes_ok
 
@@ -713,6 +798,25 @@ try_match_keyword:
     jmp .compare_loop
 
 .bytes_ok:
+; ===================================================================================================
+// ANCHOR: LEXER_KEYWORD_BYTES_OK_BOUNDARY_CHECK
+// NOTE: .bytes_ok는 최종 keyword match 성공 지점이 아니라,
+;       예약어 UTF-8 바이트열이 모두 일치한 "중간 상태"다.
+;
+// MECHANISM:
+;       input[cur_off + i]와 keyword_bytes[i]를 i=0..rcx-1까지 비교하고,
+;       모든 바이트가 같으면 이 지점으로 온다.
+;
+// REVIEW: 예약어 바이트열이 일치해도 바로 성공 처리하면 안 된다.
+;         다음 바이트가 token boundary인지 확인해야 한다.
+;         예: "정수 x"는 KW_INT로 인정 가능하지만,
+;             "정수값"을 KW_INT + IDENT로 잘못 분리하면 안 된다.
+;
+; TODO(refactor): .bytes_ok 이름을 .keyword_bytes_matched로 바꾸고,
+;                 다음 바이트 경계 확인 부분은 .check_keyword_boundary로 분리한다.
+;                 경계 확인까지 끝난 최종 성공 지점은 .match_success 같은 이름을 사용한다.
+; ===================================================================================================
+
     ; 다음 바이트가 구분자여야 키워드로 인정
     mov al, [r10 + rcx]
     call is_delimiter_al
@@ -750,6 +854,52 @@ try_match_keyword:
 ; [A-Za-z_]
 ; 반환: eax = 1 또는 0
 ; =========================================================
+;----------------------------------------------------------------------------------------------------------------------
+// ANCHOR: LEXER_IDENT_START_ASCII_RANGE_REFACTOR
+// NOTE: 현재 식별자 시작 문자는 ASCII 기준 A-Z, a-z, '_'만 허용한다.
+;       기존 구현은 동작은 가능하지만 .check_lower 라벨로 숫자/기호/밑줄 후보까지
+;       흘러들어갈 수 있어 흐름과 이름이 직관적으로 맞지 않는다.
+;
+// REVIEW: 리팩토링 시 소문자 범위(a-z), 대문자 범위(A-Z), 밑줄(_) 검사를
+;         명확한 라벨 이름으로 분리한다.
+;
+; RECOMMENDED_FLOW:
+;       1. 'a' <= al <= 'z' 이면 성공
+;       2. al < 'a' 이면 대문자 또는 '_' 가능성이 있으므로 추가 검사
+;       3. al > 'z' 이면 실패
+;       4. 'A' <= al <= 'Z' 이면 성공
+;       5. al == '_' 이면 성공
+;
+; TODO(refactor): .check_lower 같은 모호한 라벨명은 .check_upper / .check_us / .no / .yes로 정리한다.
+; TODO(test): 식별자 경계값 테스트를 추가한다.
+;             예: _x, A, Z, a, z, a1, 1a, 한글식별자
+; TODO(feature): 한글 식별자는 $표시로 진행을 검토 중
+; refac_is_ident_start_al:
+;     cmp al, 'a' ; 0x0061
+;     jb .refac_check_higher
+;     cmp al, 'z' ; 0x007A
+;     jbe .refac_yes
+;     jmp .refac_no
+
+; .refac_check_higher:
+;     cmp al, 'A' ; 0x0041
+;     jb .refac_no
+;     cmp al, 'Z' ; 0x005A
+;     jbe .refac_yes
+;     jmp .refac_check_us
+
+; .refac_check_us:
+;     cmp al, '_' ; 0x005F
+;     je .refac_yes
+
+; .refac_no:
+;     xor eax, eax
+;     ret
+
+; .refac_yes:
+;     mov eax, 1
+;     ret
+;----------------------------------------------------------------------------------------------------------------------
 is_ident_start_al:
     cmp al, 'A'
     jb .check_lower
@@ -772,6 +922,8 @@ is_ident_start_al:
 .yes:
     mov eax, 1
     ret
+
+
 
 ; =========================================================
 ; is_ident_continue_al
@@ -815,15 +967,15 @@ is_ident_continue_al:
 ; 반환: eax = 1 또는 0
 ; =========================================================
 is_delimiter_al:
-    cmp al, 0
+    cmp al, 0       ; NULL
     je .yes
-    cmp al, ' '
+    cmp al, ' '     ; space
     je .yes
-    cmp al, 9
+    cmp al, 9       ; HT
     je .yes
-    cmp al, 10
+    cmp al, 10      ; LF
     je .yes
-    cmp al, 13
+    cmp al, 13      ; CR
     je .yes
     cmp al, '#'
     je .yes

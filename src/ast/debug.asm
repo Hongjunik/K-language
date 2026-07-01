@@ -85,11 +85,43 @@ ast_dump_node:
 
 .var_decl:
     push rdi
+
+    ; 선언문 노드 표시
     mov dl, 'V'
     call debug_emit_char
+
+    ; type 존재 여부 표시
+    mov rax, [rdi + VAR_DECL_TYPE_ID]
+    test rax, rax
+    jz .no_type
+
+    mov dl, 'T'
+    call debug_emit_char
+    jmp .after_type
+
+.no_type:
+    mov dl, '-'
+    call debug_emit_char
+
+.after_type:
+    ; modifier 존재 여부 표시
+    mov rax, [rdi + VAR_DECL_MOD_FLAGS]
+    test rax, rax
+    jz .no_mod
+
+    mov dl, 'M'
+    call debug_emit_char
+    jmp .after_mod
+
+.no_mod:
+    mov dl, '-'
+    call debug_emit_char
+
+.after_mod:
     pop rdi
 
-    mov rdi, [rdi + NODE_C]     ; init expr
+    ; 초기식(init expr) 재귀 덤프 유지
+    mov rdi, [rdi + VAR_DECL_INIT_EXPR]
     call ast_dump_node
     ret
 
